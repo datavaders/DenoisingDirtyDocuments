@@ -263,7 +263,7 @@ class MiniDenoisingNet:
 
     # Train:
     def fit(self, X, y, num_epoch = 1, batch_size = 16, weight_save_path=None, weight_load_path=None,
-            plot_losses=False):
+            plot_losses=False, print_every = 1):
         self._y = tf.placeholder(tf.float32, shape=[None, self._w * self._h])
         # self._mean_loss = tf.reduce_mean(tf.square(self._y - self._op))
         # self._mean_loss = -tf.reduce_mean(self._y * tf.log(self._op) + (1 - self._y) * tf.log(1 - self._op))
@@ -281,7 +281,7 @@ class MiniDenoisingNet:
             self._sess.run(tf.global_variables_initializer())
         if num_epoch > 0:
             print('Training Denoising Net for ' + str(num_epoch) + ' epochs')
-            self.run_model(self._sess, self._op, self._mean_loss, X, y, num_epoch, batch_size, 1,
+            self.run_model(self._sess, self._op, self._mean_loss, X, y, num_epoch, batch_size, print_every,
                            self._train_step, weight_save_path=weight_save_path, plot_losses=plot_losses)
 
     def create_pad(self, n, pad):
@@ -298,11 +298,3 @@ class MiniDenoisingNet:
 
     def evaluate(self, X, y):
         self.run_model(self._sess, self._op, self._mean_loss, X, y, 1, 16)
-
-
-
-
-
-
-
-
