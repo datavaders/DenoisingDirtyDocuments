@@ -31,16 +31,34 @@ class MiniDenoisingNet:
         self._batch_size = tf.shape(self._X_norm)[0]
 
         # Create network:
-        self._conv_module_1 = self.convolutional_module_with_max_pool(x = self._X_norm, inp_channel = 1, op_channel = 2, name = "module_1", strides = 1)
-        self._conv_module_2 = self.convolutional_module_with_max_pool(x = self._conv_module_1, inp_channel = 2, op_channel = 4, name = "module_2", strides = 1)
+        self._conv_module_1 = self.convolutional_module_with_max_pool(x = self._X_norm,
+                                                                      inp_channel = 1,
+                                                                      op_channel = 2,
+                                                                      name = "module_1",
+                                                                      strides = 1)
+        self._conv_module_2 = self.convolutional_module_with_max_pool(x = self._conv_module_1,
+                                                                      inp_channel = 2,
+                                                                      op_channel = 4,
+                                                                      name = "module_2",
+                                                                      strides = 1)
+        # self._conv_module_3 = self.convolutional_module_with_max_pool(x = self._conv_module_2,
+        #                                                               inp_channel = 4,
+        #                                                               op_channel = 8,
+        #                                                               name = "module_3",
+        #                                                               strides = 1)
 
         self._re = tf.reshape(self._conv_module_2, shape = [-1, 676])
 
+        self._W_1 = tf.get_variable(name = "W_1", shape = [676, 1000],
+                                    initializer=tf.keras.initializers.he_normal())
+        self._b = tf.get_variable(name = "b_1", shape = [1000])
+        self._fc1 = tf.nn.relu(tf.matmul(self._re, self._W_1) + self._b)
 
-        self._W_decode = tf.get_variable(name = "W_decode", shape = [676, inp_w * inp_h],
+
+        self._W_decode = tf.get_variable(name = "W_decode", shape = [1000, inp_w * inp_h],
                                  initializer=tf.keras.initializers.he_normal())
         self._b_decode = tf.get_variable(name = "b_decode", shape = [inp_w * inp_h])
-        self._X_reconstructed = tf.matmul(self._re, self._W_decode) + self._b_decode
+        self._X_reconstructed = tf.matmul(self._fc1, self._W_decode) + self._b_decode
         self._X_reconstructed_batch_norm = tf.layers.batch_normalization(self._X_reconstructed, training = self._is_training)
         self.__X_reconstructed_dropout = tf.nn.dropout(self._X_reconstructed_batch_norm, keep_prob = self._keep_prob_tensor)
         self._op = tf.sigmoid(self._X_reconstructed_batch_norm)
@@ -261,7 +279,8 @@ class MiniDenoisingNet:
         self._y = tf.placeholder(tf.float32, shape=[None, self._w * self._h])
         # self._mean_loss = tf.reduce_mean(tf.square(self._y - self._op))
         # self._mean_loss = -tf.reduce_mean(self._y * tf.log(self._op) + (1 - self._y) * tf.log(1 - self._op))
-        self._mean_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels = self._y, logits = self.__X_reconstructed_dropout))
+        # self._mean_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels = self._y, logits = self.__X_reconstructed_dropout))
+        self._mean_loss = tf.losses.mean_squared_error(labels = self._y, predictions = self._op)
         self._optimizer = tf.train.AdamOptimizer(1e-4)
         extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(extra_update_ops):

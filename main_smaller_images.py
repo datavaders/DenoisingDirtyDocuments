@@ -1,4 +1,4 @@
-def run(use_gpu, print_every):
+def run(use_gpu, print_every, num_epoch = 15):
     import numpy as np
     from pathlib import Path
     import cv2
@@ -19,6 +19,8 @@ def run(use_gpu, print_every):
     sample_path = predictions_path + "sampleSubmission.csv"
     demo_path = predictions_path + "demo.csv"
     weight_save_path = str(d) + "/weights/model.ckpt"
+    weight_load_path = str(d) + "/weights/6/model.ckpt"
+
 
     X_train = []
     y_train = []
@@ -30,7 +32,7 @@ def run(use_gpu, print_every):
     mini_img_height = 64
     stride = 16
 
-    num_epoch = 10
+
     thres = 0.75
 
     for filename in os.listdir(train_images_path):
@@ -64,9 +66,12 @@ def run(use_gpu, print_every):
     y_train = np.array(y_train).reshape(-1, mini_img_width, mini_img_height, 1)
     y_train_flat = y_train.reshape(y_train.shape[0], -1)
     X_test = np.array(X_test).reshape(-1, mini_img_width, mini_img_height, 1)
+    print(X_train.shape)
 
     model = MiniDenoisingNet(inp_w = mini_img_width, inp_h = mini_img_height, use_gpu = use_gpu)
-    model.fit(X_train, y_train_flat, num_epoch = num_epoch, weight_save_path = weight_save_path, print_every = print_every)
+    model.fit(X_train, y_train_flat, num_epoch = num_epoch,
+              weight_load_path = weight_load_path,
+              weight_save_path = weight_save_path, print_every = print_every)
 
     predictions = model.predict(X_test)
     predictions_reconstructed = reconstruct_sliding(predictions.reshape(-1, mini_img_width, mini_img_height),
