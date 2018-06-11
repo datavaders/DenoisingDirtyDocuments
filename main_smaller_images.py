@@ -1,8 +1,4 @@
-<<<<<<< Updated upstream
-def run(use_gpu, print_every, num_epoch = 15):
-=======
-def run(use_gpu, print_every, num_epoch = 10, batch_size = 10, stride = 64):
->>>>>>> Stashed changes
+def run(use_gpu, print_every, num_epoch = 10, batch_size = 16, stride = 64, use_prev_weight = False):
     import numpy as np
     from pathlib import Path
     import cv2
@@ -23,7 +19,10 @@ def run(use_gpu, print_every, num_epoch = 10, batch_size = 10, stride = 64):
     sample_path = predictions_path + "sampleSubmission.csv"
     demo_path = predictions_path + "demo.csv"
     weight_save_path = str(d) + "/weights/model.ckpt"
-    weight_load_path = str(d) + "/weights/6/model.ckpt"
+    if use_prev_weight:
+        weight_load_path = str(d) + "/weights/model.ckpt"
+    else:
+        weight_load_path = None
 
 
     X_train = []
@@ -35,10 +34,6 @@ def run(use_gpu, print_every, num_epoch = 10, batch_size = 10, stride = 64):
     mini_img_width = 64
     mini_img_height = 64
 
-<<<<<<< Updated upstream
-
-=======
->>>>>>> Stashed changes
     thres = 0.75
 
     for filename in os.listdir(train_images_path):
@@ -68,31 +63,15 @@ def run(use_gpu, print_every, num_epoch = 10, batch_size = 10, stride = 64):
 
     print("Finish Sliding")
 
-    print(len(X_train))
-    print(len(y_train))
-
     X_train = np.array(X_train).reshape(-1, mini_img_width, mini_img_height, 1)
-    print("1")
-    print(mini_img_width)
-    print(mini_img_height)
     y_train = np.array(y_train).reshape(-1, mini_img_width, mini_img_height, 1)
-    print("2")
     y_train_flat = y_train.reshape(y_train.shape[0], -1)
-    print("3")
     X_test = np.array(X_test).reshape(-1, mini_img_width, mini_img_height, 1)
-<<<<<<< Updated upstream
-    print(X_train.shape)
 
     model = MiniDenoisingNet(inp_w = mini_img_width, inp_h = mini_img_height, use_gpu = use_gpu)
     model.fit(X_train, y_train_flat, num_epoch = num_epoch,
               weight_load_path = weight_load_path,
               weight_save_path = weight_save_path, print_every = print_every)
-=======
-    print("4")
-
-    model = MiniDenoisingNet(inp_w = mini_img_width, inp_h = mini_img_height, use_gpu = use_gpu)
-    model.fit(X_train, y_train_flat, num_epoch = num_epoch, weight_save_path = weight_save_path, print_every = print_every, batch_size = batch_size)
->>>>>>> Stashed changes
 
     predictions = model.predict(X_test)
     predictions_reconstructed = reconstruct_sliding(predictions.reshape(-1, mini_img_width, mini_img_height),
