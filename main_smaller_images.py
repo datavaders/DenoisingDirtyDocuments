@@ -31,8 +31,8 @@ def run(use_gpu, print_every, num_epoch = 10, batch_size = 16, stride = 64, use_
 
     image_width = 420
     image_height = 540
-    mini_img_width = 64
-    mini_img_height = 64
+    mini_img_width = 32
+    mini_img_height = 32
 
     thres = 0.75
 
@@ -77,12 +77,16 @@ def run(use_gpu, print_every, num_epoch = 10, batch_size = 16, stride = 64, use_
     predictions_reconstructed = reconstruct_sliding(predictions.reshape(-1, mini_img_width, mini_img_height),
                                                     image_sizes=image_sizes,
                                                     ind_list=sub_ind,
-                                                    n_subimages=n_subimages)
+                                                    n_subimages = n_subimages,
+                                                    mini_width = mini_img_width,
+                                                    mini_height = mini_img_height)
     predictions_thresholded = threshold_v2(predictions_reconstructed, threshold=thres)
     X_test_reconstructed = reconstruct_sliding(X_test.reshape(-1, mini_img_width, mini_img_height),
                                                image_sizes=image_sizes,
                                                ind_list=sub_ind,
-                                               n_subimages=n_subimages)
+                                               n_subimages=n_subimages,
+                                               mini_width = mini_img_width,
+                                               mini_height = mini_img_height)
     print("Finish reconstructing")
 
     for ind in range(len(predictions_reconstructed)):

@@ -36,29 +36,27 @@ class MiniDenoisingNet:
                                                                       op_channel = 2,
                                                                       name = "module_1",
                                                                       strides = 1)
-        self._conv_module_2 = self.convolutional_module_with_max_pool(x = self._conv_module_1,
-                                                                      inp_channel = 2,
-                                                                      op_channel = 4,
-                                                                      name = "module_2",
-                                                                      strides = 1)
-        # self._conv_module_3 = self.convolutional_module_with_max_pool(x = self._conv_module_2,
-        #                                                               inp_channel = 4,
-        #                                                               op_channel = 8,
-        #                                                               name = "module_3",
-        #                                                               strides = 1)
-
-        self._re = tf.reshape(self._conv_module_2, shape = [-1, 676])
-
-        self._W_1 = tf.get_variable(name = "W_1", shape = [676, 1000],
-                                    initializer=tf.keras.initializers.he_normal())
-        self._b = tf.get_variable(name = "b_1", shape = [1000])
-        self._fc1 = tf.nn.relu(tf.matmul(self._re, self._W_1) + self._b)
+        self._res_module_1 = self.residual_module(self._conv_module_1, name = "res_1", inp_channel = 2)
+        self._res_module_2 = self.residual_module(self._res_module_1, name = "res_2", inp_channel = 2)
+        self._res_module_3 = self.residual_module(self._res_module_2, name = "res_3", inp_channel = 2)
+        self._res_module_4 = self.residual_module(self._res_module_3, name = "res_4", inp_channel = 2)
 
 
-        self._W_decode = tf.get_variable(name = "W_decode", shape = [1000, inp_w * inp_h],
+
+
+
+        self._re = tf.reshape(self._res_module_4, shape = [-1, 512])
+
+        self._W1 = tf.get_variable(name = "W1", shape = [512, 768],
+                                   initializer=tf.keras.initializers.he_normal())
+        self._b1 = tf.get_variable(name = "b1", shape = [768])
+        self._fc1 = tf.nn.relu(tf.matmul(self._re, self._W1) + self._b1)
+        self._fc1_batch_norm = tf.layers.batch_normalization(self._fc1, training = self._is_training)
+
+        self._W_decode = tf.get_variable(name = "W_decode", shape = [768, inp_w * inp_h],
                                  initializer=tf.keras.initializers.he_normal())
         self._b_decode = tf.get_variable(name = "b_decode", shape = [inp_w * inp_h])
-        self._X_reconstructed = tf.matmul(self._fc1, self._W_decode) + self._b_decode
+        self._X_reconstructed = tf.matmul(self._fc1_batch_norm, self._W_decode) + self._b_decode
         self._X_reconstructed_batch_norm = tf.layers.batch_normalization(self._X_reconstructed, training = self._is_training)
         self.__X_reconstructed_dropout = tf.nn.dropout(self._X_reconstructed_batch_norm, keep_prob = self._keep_prob_tensor)
         self._op = tf.sigmoid(self._X_reconstructed_batch_norm)
@@ -67,7 +65,7 @@ class MiniDenoisingNet:
 
     # Define layers and modules:
     def convolutional_layer(self, x, name, inp_channel, op_channel, kernel_size=3, strides = 1, padding='VALID',
-                            pad = 0, dropout=False, not_activated=False):
+                            pad = 1, dropout=False, not_activated=False):
         if pad != 0:
             x_padded = tf.pad(x, self.create_pad(4, pad))
         else:
@@ -194,7 +192,6 @@ class MiniDenoisingNet:
         return total_loss, total_correct
 
     def convolutional_module_with_max_pool(self, x, inp_channel, op_channel, name, strides = 1):
-        # conv1 = self.convolutional_layer(x, inp_channel = inp_channel, op_channel = op_channel, name = name + "_conv1")
         conv1 = self.convolutional_layer(x, inp_channel=inp_channel, op_channel=op_channel, name=name + "_conv1", strides = strides)
         conv2 = self.convolutional_layer(conv1, inp_channel=op_channel, op_channel=op_channel, name=name + "_conv2", strides = strides)
         conv2_max_pool = self.max_pool_2x2(conv2)
@@ -213,7 +210,6 @@ class MiniDenoisingNet:
     def residual_module(self, x, name, inp_channel):
         conv1 = self.convolutional_layer(x, name + "_conv1", inp_channel, inp_channel)
         conv2 = self.convolutional_layer(conv1, name + "_conv2", inp_channel, inp_channel, not_activated=True)
-        # conv3 = self.convolutional_layer(conv2, name + "conv3", inp_channel, op_channel, dropout = True)
         res_layer = tf.nn.relu(tf.add(conv2, x, name="res"))
 
         batch_norm = tf.contrib.layers.batch_norm(res_layer, is_training=self._is_training)
@@ -277,9 +273,6 @@ class MiniDenoisingNet:
     def fit(self, X, y, num_epoch = 1, batch_size = 16, weight_save_path=None, weight_load_path=None,
             plot_losses=False, print_every = 1):
         self._y = tf.placeholder(tf.float32, shape=[None, self._w * self._h])
-        # self._mean_loss = tf.reduce_mean(tf.square(self._y - self._op))
-        # self._mean_loss = -tf.reduce_mean(self._y * tf.log(self._op) + (1 - self._y) * tf.log(1 - self._op))
-        # self._mean_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels = self._y, logits = self.__X_reconstructed_dropout))
         self._mean_loss = tf.losses.mean_squared_error(labels = self._y, predictions = self._op)
         self._optimizer = tf.train.AdamOptimizer(1e-4)
         extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
