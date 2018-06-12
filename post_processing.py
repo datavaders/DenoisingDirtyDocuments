@@ -45,4 +45,3 @@ for ind in range(len(images)):
 
 # for ind in range(len(images_thresholded)):
 #     cv2.imwrite(predictions_path + "_thresholded_v3_" + str(img_ind[ind]) + ".png", images_thresholded[ind] * 255)
-

@@ -16,8 +16,9 @@ def crop(image, store, mini_width = 30, mini_height = 30):
             # np.append(store, mini_image, axis = 0)
             store.append(mini_image)
 
-def slide(image, store, mini_width, mini_height, strides = 16, reconstructed = False):
+def slide(image, mini_width, mini_height, strides = 16):
     position = []
+    store = []
     n_image = 0
     for r in range(0, image.shape[0] -  mini_width + 1,  strides):
         for c in range(0, image.shape[1] -  mini_height + 1, strides):
@@ -44,8 +45,7 @@ def slide(image, store, mini_width, mini_height, strides = 16, reconstructed = F
         n_image += 1
 
 
-    if reconstructed:
-        return n_image, position
+    return store, n_image, position
 
 def reconstruct(images, indices_list, mini_width = 30, mini_height = 30):
     done = 0

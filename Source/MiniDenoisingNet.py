@@ -2,6 +2,11 @@ import tensorflow as tf
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+import os
+from .util import slide
+from collections import deque
+import cv2
+import random
 
 class MiniDenoisingNet:
 
@@ -95,19 +100,15 @@ class MiniDenoisingNet:
         return z_deconv
 
         # Adapt from Stanford's CS231n Assignment3
-    def run_model(self, session, predict, loss_val, Xd, yd,
+    def run_model(self, session, predict, loss_val, train_images_path, train_images_cleaned_path,
                   epochs=1, batch_size=1, print_every=1,
-                  training=None, plot_losses=False, weight_save_path=None, patience=None):
+                  training=None, plot_losses=False, weight_save_path=None, patience=None, stride = 16):
         # have tensorflow compute accuracy
         correct_prediction = tf.equal(tf.to_int32(self._op > self._threshold), tf.to_int32(self._y > self._threshold))
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
         # Define saver:
         saver = tf.train.Saver()
-
-        # shuffle indicies
-        train_indicies = np.arange(Xd.shape[0])
-        np.random.shuffle(train_indicies)
 
         training_now = training is not None
 
@@ -124,23 +125,67 @@ class MiniDenoisingNet:
         iter_cnt = 0
         val_losses = []
         early_stopping_cnt = 0
+
+        def read_images(filename):
+            init_image_path = train_images_path + filename
+            init_img = cv2.imread(init_image_path, cv2.IMREAD_GRAYSCALE) / 255
+            cleaned_image_path = train_images_cleaned_path + filename
+            cleaned_img = cv2.imread(cleaned_image_path, cv2.IMREAD_GRAYSCALE) / 255
+            return (init_img, cleaned_img)
+
+
+        pre_read_images = list(map(read_images, os.listdir(train_images_path)))
+
         for e in range(epochs):
             # keep track of losses and accuracy
             correct = 0
+            total_img = 0
             losses = []
+
+            random.shuffle(pre_read_images)
+            rem_images = deque(pre_read_images)
+            cached_images = deque()
+
             # make sure we iterate over the dataset once
-            for i in range(int(math.ceil(Xd.shape[0] / batch_size))):
-                # generate indicies for the batch
-                start_idx = (i * batch_size) % Xd.shape[0]
-                idx = train_indicies[start_idx:start_idx + batch_size]
+            while (len(cached_images) > 0 or len(rem_images) > 0):
+                cached_images = list(cached_images)
+                if (len(cached_images) < batch_size):
+                    while (len(rem_images) > 0 and len(cached_images) < 1000):
+                        (init_img, cleaned_img) = rem_images.pop()
+
+                        init_list_images, wc1, wc2 = slide(init_img, mini_height=self._h, mini_width=self._w, strides=stride)
+
+                        cleaned_list_images, wc1, wc2 = slide(cleaned_img, mini_height=self._h, mini_width=self._w, strides=stride)
+
+                        total_img += len(init_list_images)
+
+                        cached_images.extend(zip(init_list_images, cleaned_list_images))
+
+                    random.shuffle(cached_images)
+                    cached_images = deque(cached_images)
+
+                is_final_batch = len(rem_images) == 0 and len(cached_images) <= batch_size
 
                 # create a feed dictionary for this batch
                 # get batch size
-                actual_batch_size = yd[idx].shape[0]
 
-                if i < int(math.ceil(Xd.shape[0] / batch_size)) - 1:
-                    feed_dict = {self._X: Xd[idx, :],
-                                 self._y: yd[idx],
+                Xd = []
+                yd = []
+
+                while (len(cached_images) > 0 and len(Xd) < batch_size):
+                    (nextX, nexty) = cached_images.pop()
+                    Xd.append(nextX)
+                    yd.append(nexty)
+
+                actual_batch_size = len(Xd)
+
+                Xd = np.array(Xd).reshape(-1, self._w, self._h, 1)
+                yd = np.array(yd).reshape(-1, self._w, self._h, 1)
+                yd = yd.reshape(yd.shape[0], -1)
+
+                if not is_final_batch:
+                    feed_dict = {self._X: Xd,
+                                 self._y: yd,
                                  self._is_training: training_now,
                                  self._keep_prob_tensor: self._keep_prob_passed}
                     # have tensorflow compute loss and correct predictions
@@ -158,8 +203,8 @@ class MiniDenoisingNet:
 
 
                 else:
-                    feed_dict = {self._X: Xd[idx, :],
-                                 self._y: yd[idx],
+                    feed_dict = {self._X: Xd,
+                                 self._y: yd,
                                  self._is_training: False,
                                  self._keep_prob_tensor: 1.0}
                     val_loss = session.run(self._mean_loss, feed_dict=feed_dict)
@@ -178,8 +223,9 @@ class MiniDenoisingNet:
                             print("Patience exceeded. Finish training")
                             return
                 iter_cnt += 1
-            total_correct = correct / Xd.shape[0]
-            total_loss = np.sum(losses) / Xd.shape[0]
+            print(total_img)
+            total_correct = correct / total_img
+            total_loss = np.sum(losses) / total_img
             print("Epoch {2}, Overall loss = {0:.3g} and accuracy of {1:.3g}" \
                   .format(total_loss, total_correct / self._h / self._w, e + 1))
             if plot_losses:
@@ -270,8 +316,8 @@ class MiniDenoisingNet:
 
 
     # Train:
-    def fit(self, X, y, num_epoch = 1, batch_size = 16, weight_save_path=None, weight_load_path=None,
-            plot_losses=False, print_every = 1):
+    def fit(self, train_images_path, train_images_cleaned_path, num_epoch = 1, batch_size = 16, weight_save_path=None, weight_load_path=None,
+            plot_losses=False, print_every = 1, stride = 16):
         self._y = tf.placeholder(tf.float32, shape=[None, self._w * self._h])
         self._mean_loss = tf.losses.mean_squared_error(labels = self._y, predictions = self._op)
         self._optimizer = tf.train.AdamOptimizer(1e-4)
@@ -287,8 +333,8 @@ class MiniDenoisingNet:
             self._sess.run(tf.global_variables_initializer())
         if num_epoch > 0:
             print('Training Denoising Net for ' + str(num_epoch) + ' epochs')
-            self.run_model(self._sess, self._op, self._mean_loss, X, y, num_epoch, batch_size, print_every,
-                           self._train_step, weight_save_path=weight_save_path, plot_losses=plot_losses)
+            self.run_model(self._sess, self._op, self._mean_loss, train_images_path, train_images_cleaned_path, num_epoch, batch_size, print_every,
+                           self._train_step, weight_save_path=weight_save_path, plot_losses=plot_losses, stride = stride)
 
     def create_pad(self, n, pad):
         pad_matrix = [[0, 0]]

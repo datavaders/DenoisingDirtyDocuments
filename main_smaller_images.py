@@ -25,8 +25,6 @@ def run(use_gpu, print_every, num_epoch = 10, batch_size = 16, stride = 64, use_
         weight_load_path = None
 
 
-    X_train = []
-    y_train = []
     X_test = []
 
     image_width = 420
@@ -35,16 +33,6 @@ def run(use_gpu, print_every, num_epoch = 10, batch_size = 16, stride = 64, use_
     mini_img_height = 32
 
     thres = 0.75
-
-    for filename in os.listdir(train_images_path):
-        image_path = train_images_path + filename
-        img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE) / 255
-        slide(img, X_train, mini_height=mini_img_height, mini_width=mini_img_width, strides=stride)
-
-        image_path_y = train_images_cleaned_path + filename
-        img_y = cv2.imread(image_path_y, cv2.IMREAD_GRAYSCALE) / 255
-        slide(img_y, y_train, mini_height=mini_img_height, mini_width=mini_img_width, strides=stride)
-
     sub_ind = []
     n_subimages = []
     image_sizes = []
@@ -55,23 +43,20 @@ def run(use_gpu, print_every, num_epoch = 10, batch_size = 16, stride = 64, use_
         file_indices.append(ind)
         image_path = test_path + filename
         img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE) / 255
-        n_image, indices = slide(img, X_test, mini_height=mini_img_height,
-                                 mini_width=mini_img_width, strides=stride, reconstructed=True)
+        list_images, n_image, indices = slide(img, mini_height=mini_img_height,
+                                 mini_width=mini_img_width, strides=stride)
+        X_test.extend(list_images)
         image_sizes.append([img.shape[0], img.shape[1]])
         n_subimages.append(n_image)
         sub_ind.append(indices)
 
-    print("Finish Sliding")
-
-    X_train = np.array(X_train).reshape(-1, mini_img_width, mini_img_height, 1)
-    y_train = np.array(y_train).reshape(-1, mini_img_width, mini_img_height, 1)
-    y_train_flat = y_train.reshape(y_train.shape[0], -1)
     X_test = np.array(X_test).reshape(-1, mini_img_width, mini_img_height, 1)
 
     model = MiniDenoisingNet(inp_w = mini_img_width, inp_h = mini_img_height, use_gpu = use_gpu)
-    model.fit(X_train, y_train_flat, num_epoch = num_epoch,
+    model.fit(train_images_path, train_images_cleaned_path,num_epoch = num_epoch,
               weight_load_path = weight_load_path,
-              weight_save_path = weight_save_path, print_every = print_every)
+              weight_save_path = weight_save_path, print_every = print_every,
+              stride = stride)
 
     predictions = model.predict(X_test)
     predictions_reconstructed = reconstruct_sliding(predictions.reshape(-1, mini_img_width, mini_img_height),
